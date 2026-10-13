@@ -1,0 +1,5 @@
+[
+ {"name": "Ifeanyi Obi", "role": "Automation Engineer", "department": "Engineering", "manager": "Tunde", "start_date": "2026-10-12", "remote": true,
+  "done": {"Send offer letter and contract to {name}": "done", "Collect ID, bank details and NHF/pension forms": "done"}},
+ {"name": "Ruth Danjuma", "role": "Account Executive", "department": "Sales", "manager": "Kemi", "start_date": "2026-10-19", "remote": false, "done": {}}
+]

@@ -1,0 +1,280 @@
+{
+  "name": "Employee Onboarding Workflow (AI Automation Projects #19)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-hire",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "243b813f-1aef-5d0d-8dd1-6a1d717d130e",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "2330fd5b-57a9-5807-b316-e2150fb191ed"
+    },
+    {
+      "parameters": {},
+      "id": "c9a34571-60de-58b7-9f62-ac57bb6a399b",
+      "name": "Test with sample data",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sample data from this repo. Click 'Test workflow' to run the whole flow on it.\nconst sample = [\n {\n  \"name\": \"Ifeanyi Obi\",\n  \"role\": \"Automation Engineer\",\n  \"department\": \"Engineering\",\n  \"manager\": \"Tunde\",\n  \"start_date\": \"2026-10-12\",\n  \"remote\": true,\n  \"done\": {\n   \"Send offer letter and contract to {name}\": \"done\",\n   \"Collect ID, bank details and NHF/pension forms\": \"done\"\n  }\n },\n {\n  \"name\": \"Ruth Danjuma\",\n  \"role\": \"Account Executive\",\n  \"department\": \"Sales\",\n  \"manager\": \"Kemi\",\n  \"start_date\": \"2026-10-19\",\n  \"remote\": false,\n  \"done\": {}\n }\n];\nreturn sample.map(json => ({ json }));"
+      },
+      "id": "0bd2af4e-5dce-5621-baa6-fe553eceebfe",
+      "name": "Sample data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Employee Onboarding Workflow: core logic (ported from main.py)\nconst TEMPLATES = {\n \"common\": [\n  {\n   \"task\": \"Send offer letter and contract to {name}\",\n   \"owner\": \"HR\",\n   \"offset\": -10\n  },\n  {\n   \"task\": \"Collect ID, bank details and NHF/pension forms\",\n   \"owner\": \"HR\",\n   \"offset\": -5\n  },\n  {\n   \"task\": \"Create email and Slack accounts\",\n   \"owner\": \"IT\",\n   \"offset\": -3\n  },\n  {\n   \"task\": \"Prepare 30-60-90 day plan\",\n   \"owner\": \"manager\",\n   \"offset\": -2\n  },\n  {\n   \"task\": \"Day one welcome and introductions\",\n   \"owner\": \"manager\",\n   \"offset\": 0\n  },\n  {\n   \"task\": \"Company policies walkthrough\",\n   \"owner\": \"HR\",\n   \"offset\": 1\n  },\n  {\n   \"task\": \"First 1:1 with manager\",\n   \"owner\": \"manager\",\n   \"offset\": 3\n  },\n  {\n   \"task\": \"30-day check-in\",\n   \"owner\": \"manager\",\n   \"offset\": 22\n  }\n ],\n \"department\": {\n  \"Engineering\": [\n   {\n    \"task\": \"Grant GitHub and cloud access\",\n    \"owner\": \"IT\",\n    \"offset\": -1\n   },\n   {\n    \"task\": \"Pair on first small task\",\n    \"owner\": \"manager\",\n    \"offset\": 2\n   }\n  ],\n  \"Sales\": [\n   {\n    \"task\": \"Create CRM seat\",\n    \"owner\": \"IT\",\n    \"offset\": -1\n   },\n   {\n    \"task\": \"Shadow three sales calls\",\n    \"owner\": \"manager\",\n    \"offset\": 4\n   }\n  ]\n },\n \"remote\": [\n  {\n   \"task\": \"Courier laptop and headset\",\n   \"owner\": \"IT\",\n   \"offset\": -4\n  }\n ],\n \"onsite\": [\n  {\n   \"task\": \"Set up desk, laptop and access card\",\n   \"owner\": \"IT\",\n   \"offset\": -1\n  }\n ]\n};\n// ---- input normaliser (works for Webhook, Form, WhatsApp, Gmail, Sheets and sample data)\nconst input = $input.all().flatMap(i => {\n  const j = i.json || {};\n  if (j.messages && Array.isArray(j.messages)) {           // WhatsApp Trigger\n    return j.messages.filter(m => m.text).map(m => ({ from: '+' + m.from, text: m.text.body }));\n  }\n  if (j.Subject !== undefined || j.From !== undefined) {     // Gmail Trigger (simple)\n    return [{ from: (j.From || '').replace(/.*<|>.*/g, ''), subject: j.Subject || '', body: j.snippet || j.text || '' }];\n  }\n  const b = (j.body !== undefined && j.headers !== undefined) ? j.body : j;   // Webhook wraps payload in body\n  if (Array.isArray(b)) return b;\n  if (b && Array.isArray(b.items)) return b.items;\n  return [b];\n});\n\nconst addBiz = (d, n) => { d = new Date(d); const s = n >= 0 ? 1 : -1; while (n) { d.setUTCDate(d.getUTCDate() + s); const w = d.getUTCDay(); if (w !== 0 && w !== 6) n -= s; } return d; };\nconst out = [];\nfor (const h of input) {\n  const start = new Date(h.start_date + 'T00:00:00Z');\n  const tasks = [...TEMPLATES.common, ...(TEMPLATES.department[h.department] || []), ...TEMPLATES[h.remote ? 'remote' : 'onsite']];\n  for (const t of tasks) out.push({ route: 'task', hire: h.name, task: t.task.replace('{name}', h.name),\n    owner: t.owner === 'manager' ? h.manager : t.owner, due: addBiz(start, t.offset).toISOString().slice(0, 10), status: 'pending' });\n  out.push({ route: 'welcome', hire: h.name, email: (h.email || h.name.split(' ')[0].toLowerCase() + '@yourcompany.com'),\n    message: `Hi ${h.name.split(' ')[0]}, welcome to the team! On ${h.start_date} ${h.remote ? 'join the 9am video call in your inbox' : 'please arrive at 9am at reception'}. ${h.manager} will be your manager.` });\n}\nreturn out.map(json => ({ json }));\n"
+      },
+      "id": "8bbfefdb-4098-5153-a687-4801b1e0cb58",
+      "name": "Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "38cdf821-9ad6-55e2-a16c-d0a174b83e30",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "acda7a13-669c-5da3-b3d8-946b70ca52f4",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "task",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "task"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e1473af1-5f2f-55a9-b5d7-c7ee04c59a48",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "welcome",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "welcome"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "03538972-ee2b-58b7-80bd-601b6c5bac13",
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        720,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "7dd97e1a-693c-5721-8df4-23dfc347d4ef",
+      "name": "Add tasks to onboarding tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        980,
+        30
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Welcome to the team!",
+        "emailType": "text",
+        "message": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "21de0dbe-afd1-591c-8430-30d17f9a9f5b",
+      "name": "Email welcome note",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        980,
+        210
+      ],
+      "webhookId": "21de0dbe-afd1-591c-8430-30d17f9a9f5b"
+    },
+    {
+      "parameters": {
+        "content": "## Employee Onboarding Workflow\nOne new-hire record creates every onboarding task with an owner and a deadline, and chases the ones running late.\n\nPOST a new hire from your HR form (name, role, department, manager, start_date, remote). Builds the full onboarding task list with owners and business-day due dates, adds it to a tracker sheet, and emails the new hire a welcome note.\n\n**Try it:** click *Test workflow* to run on the sample data. Then connect your credentials on the output nodes and activate.\n\nCode and docs: github.com/Princewill106/employee-onboarding-workflow",
+        "height": 340,
+        "width": 420,
+        "color": 5
+      },
+      "id": "2e94020d-27e5-597c-b2f4-2a9442a7eafc",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -460
+      ]
+    }
+  ],
+  "connections": {
+    "Test with sample data": {
+      "main": [
+        [
+          {
+            "node": "Sample data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample data": {
+      "main": [
+        [
+          {
+            "node": "Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logic": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Add tasks to onboarding tracker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email welcome note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

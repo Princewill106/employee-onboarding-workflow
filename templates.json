@@ -1,0 +1,20 @@
+{
+ "common": [
+  {"task": "Send offer letter and contract to {name}", "owner": "HR", "offset": -10},
+  {"task": "Collect ID, bank details and NHF/pension forms", "owner": "HR", "offset": -5},
+  {"task": "Create email and Slack accounts", "owner": "IT", "offset": -3},
+  {"task": "Prepare 30-60-90 day plan", "owner": "manager", "offset": -2},
+  {"task": "Day one welcome and introductions", "owner": "manager", "offset": 0},
+  {"task": "Company policies walkthrough", "owner": "HR", "offset": 1},
+  {"task": "First 1:1 with manager", "owner": "manager", "offset": 3},
+  {"task": "30-day check-in", "owner": "manager", "offset": 22}
+ ],
+ "department": {
+  "Engineering": [{"task": "Grant GitHub and cloud access", "owner": "IT", "offset": -1},
+                  {"task": "Pair on first small task", "owner": "manager", "offset": 2}],
+  "Sales": [{"task": "Create CRM seat", "owner": "IT", "offset": -1},
+            {"task": "Shadow three sales calls", "owner": "manager", "offset": 4}]
+ },
+ "remote": [{"task": "Courier laptop and headset", "owner": "IT", "offset": -4}],
+ "onsite": [{"task": "Set up desk, laptop and access card", "owner": "IT", "offset": -1}]
+}
